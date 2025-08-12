@@ -7,7 +7,8 @@ import { RecurringClassMetricCards } from '@/components/dashboard/RecurringClass
 import { RecurringClassDetailedDataTable } from '@/components/dashboard/RecurringClassDetailedDataTable';
 import { RecurringClassMonthOnMonthTable } from '@/components/dashboard/RecurringClassMonthOnMonthTable';
 import { RecurringClassYearOnYearTable } from '@/components/dashboard/RecurringClassYearOnYearTable';
-import { RecurringClassTopBottomLists } from '@/components/dashboard/RecurringClassTopBottomLists';
+import { RecurringClassInteractiveRankings } from '@/components/dashboard/RecurringClassInteractiveRankings';
+import { RecurringClassAnimatedCharts } from '@/components/dashboard/RecurringClassAnimatedCharts';
 import { RecurringClassFilterOptions } from '@/types/recurringClass';
 
 const ClassAttendance = () => {
@@ -143,7 +144,7 @@ const ClassAttendance = () => {
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-slate-600">Loading recurring class data...</p>
+            <p className="mt-4 text-slate-600">Loading recurring class performance data...</p>
           </div>
         </div>
       </div>
@@ -186,12 +187,15 @@ const ClassAttendance = () => {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="tables" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="tables" className="text-sm font-medium">
               Performance Tables
             </TabsTrigger>
+            <TabsTrigger value="charts" className="text-sm font-medium">
+              Analytics Charts
+            </TabsTrigger>
             <TabsTrigger value="rankings" className="text-sm font-medium">
-              Rankings & Analysis
+              Interactive Rankings
             </TabsTrigger>
             <TabsTrigger value="detailed" className="text-sm font-medium">
               Detailed View
@@ -205,8 +209,12 @@ const ClassAttendance = () => {
             </div>
           </TabsContent>
 
+          <TabsContent value="charts" className="space-y-6">
+            <RecurringClassAnimatedCharts data={filteredData} />
+          </TabsContent>
+
           <TabsContent value="rankings" className="space-y-6">
-            <RecurringClassTopBottomLists data={filteredData} />
+            <RecurringClassInteractiveRankings data={filteredData} />
           </TabsContent>
 
           <TabsContent value="detailed" className="space-y-6">

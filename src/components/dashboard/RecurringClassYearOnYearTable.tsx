@@ -2,11 +2,12 @@
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ModernDataTable } from '@/components/ui/ModernDataTable';
 import { formatCurrency, formatNumber, formatPercentage } from '@/utils/formatters';
 import { TeacherRecurringData } from '@/hooks/useTeacherRecurringData';
-import { Calendar, TrendingUp, TrendingDown } from 'lucide-react';
+import { Calendar, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { RecurringClassMetricTabs, RecurringClassMetricType } from './RecurringClassMetricTabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface RecurringClassYearOnYearTableProps {
   data: TeacherRecurringData[];
@@ -14,16 +15,17 @@ interface RecurringClassYearOnYearTableProps {
 }
 
 // Move helper functions outside of component to avoid hoisting issues
-const getMetricValue = (item: any, metric: RecurringClassMetricType) => {
+const getMetricValue = (yearData: any, metric: RecurringClassMetricType) => {
+  if (!yearData) return 0;
   switch (metric) {
-    case 'attendance': return item.totalAttendance;
-    case 'revenue': return item.totalRevenue;
-    case 'fillRate': return item.fillRate;
-    case 'classAverage': return item.classAverage;
-    case 'emptySessions': return item.totalEmpty;
-    case 'lateCancellations': return item.totalLateCancelled;
-    case 'capacity': return item.totalCapacity;
-    case 'sessions': return item.totalSessions;
+    case 'attendance': return yearData.attendance;
+    case 'revenue': return yearData.revenue;
+    case 'fillRate': return yearData.capacity > 0 ? (yearData.attendance / yearData.capacity) * 100 : 0;
+    case 'classAverage': return yearData.sessions > 0 ? yearData.attendance / yearData.sessions : 0;
+    case 'emptySessions': return yearData.emptySessions;
+    case 'lateCancellations': return yearData.lateCancellations;
+    case 'capacity': return yearData.capacity;
+    case 'sessions': return yearData.sessions;
     default: return 0;
   }
 };
@@ -42,175 +44,115 @@ export const RecurringClassYearOnYearTable: React.FC<RecurringClassYearOnYearTab
   onRowClick
 }) => {
   const [selectedMetric, setSelectedMetric] = useState<RecurringClassMetricType>('attendance');
+  const [sortField, setSortField] = useState<string>('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  const yearOnYearData = useMemo(() => {
-    if (!data.length) return [];
+  const { processedData, uniqueYears } = useMemo(() => {
+    if (!data.length) return { processedData: [], uniqueYears: [] };
 
-    // Group data by trainer and year
+    // Get unique years and sort them
+    const years = Array.from(new Set(data.map(item => {
+      return new Date(item.date).getFullYear().toString();
+    }))).sort().reverse(); // Most recent first
+
+    // Group data by trainer + class + time
     const groupedData = data.reduce((acc, item) => {
       const year = new Date(item.date).getFullYear().toString();
-      const key = `${item.trainer}-${year}`;
+      const key = `${item.trainer}-${item.class}-${item.time}`;
       
       if (!acc[key]) {
         acc[key] = {
           trainer: item.trainer,
-          year,
+          class: item.class,
+          day: item.day,
+          time: item.time,
           location: item.location,
+          yearlyData: {},
           totalSessions: 0,
           totalAttendance: 0,
           totalRevenue: 0,
-          totalCapacity: 0,
-          totalEmpty: 0,
-          totalLateCancelled: 0,
-          classes: new Set()
+          totalCapacity: 0
         };
       }
+      
+      if (!acc[key].yearlyData[year]) {
+        acc[key].yearlyData[year] = {
+          sessions: 0,
+          attendance: 0,
+          revenue: 0,
+          capacity: 0,
+          emptySessions: 0,
+          lateCancellations: 0
+        };
+      }
+      
+      acc[key].yearlyData[year].sessions += 1;
+      acc[key].yearlyData[year].attendance += item.checkedIn;
+      acc[key].yearlyData[year].revenue += item.revenue;
+      acc[key].yearlyData[year].capacity += item.capacity;
+      acc[key].yearlyData[year].emptySessions += item.emptySessions;
+      acc[key].yearlyData[year].lateCancellations += item.lateCancelled;
       
       acc[key].totalSessions += 1;
       acc[key].totalAttendance += item.checkedIn;
       acc[key].totalRevenue += item.revenue;
       acc[key].totalCapacity += item.capacity;
-      acc[key].totalEmpty += item.emptySessions;
-      acc[key].totalLateCancelled += item.lateCancelled;
-      acc[key].classes.add(item.class);
       
       return acc;
     }, {} as Record<string, any>);
 
-    // Convert to array and calculate year-over-year changes
-    const result = Object.values(groupedData).map((item: any) => {
-      const fillRate = item.totalCapacity > 0 ? (item.totalAttendance / item.totalCapacity) * 100 : 0;
-      const classAverage = item.totalSessions > 0 ? item.totalAttendance / item.totalSessions : 0;
-      
-      return {
-        ...item,
-        fillRate,
-        classAverage,
-        revenuePerSession: item.totalSessions > 0 ? item.totalRevenue / item.totalSessions : 0,
-        classFormats: item.classes.size
-      };
-    });
+    const processedRows = Object.values(groupedData).map((row: any) => ({
+      ...row,
+      fillRate: row.totalCapacity > 0 ? (row.totalAttendance / row.totalCapacity) * 100 : 0,
+      classAverage: row.totalSessions > 0 ? row.totalAttendance / row.totalSessions : 0,
+      revenuePerSession: row.totalSessions > 0 ? row.totalRevenue / row.totalSessions : 0
+    }));
 
-    // Calculate year-over-year changes
-    const resultWithChanges = result.map(item => {
-      const previousYear = result.find(prev => 
-        prev.trainer === item.trainer && 
-        parseInt(prev.year) === parseInt(item.year) - 1
-      );
-      
-      let yoyChange = 0;
-      if (previousYear) {
-        const currentValue = getMetricValue(item, selectedMetric);
-        const previousValue = getMetricValue(previousYear, selectedMetric);
-        if (previousValue > 0) {
-          yoyChange = ((currentValue - previousValue) / previousValue) * 100;
-        }
-      }
-      
-      return { ...item, yoyChange };
-    });
+    return {
+      processedData: processedRows,
+      uniqueYears: years
+    };
+  }, [data]);
 
-    return resultWithChanges.sort((a, b) => {
-      if (a.trainer !== b.trainer) {
-        return a.trainer.localeCompare(b.trainer);
-      }
-      return parseInt(b.year) - parseInt(a.year);
-    });
-  }, [data, selectedMetric]);
-
-  const columns = [
-    {
-      key: 'trainer',
-      header: 'Trainer',
-      render: (value: string, item: any) => (
-        <div className="space-y-1">
-          <div className="font-semibold text-slate-900">{value}</div>
-          <div className="text-xs text-slate-500">{item.location}</div>
-          <Badge variant="outline" className="text-xs">
-            {item.classFormats} formats
-          </Badge>
-        </div>
-      ),
-      className: 'min-w-[180px]',
-      sortable: true
-    },
-    {
-      key: 'year',
-      header: 'Year',
-      render: (value: string) => (
-        <div className="text-center">
-          <div className="font-medium text-slate-800">{value}</div>
-        </div>
-      ),
-      align: 'center' as const,
-      sortable: true
-    },
-    {
-      key: 'totalSessions',
-      header: 'Sessions',
-      render: (value: number) => (
-        <div className="text-center font-semibold text-blue-700">
-          {formatNumber(value)}
-        </div>
-      ),
-      align: 'center' as const,
-      sortable: true
-    },
-    {
-      key: selectedMetric,
-      header: selectedMetric.charAt(0).toUpperCase() + selectedMetric.slice(1),
-      render: (value: number, item: any) => {
-        const metricValue = getMetricValue(item, selectedMetric);
-        const isGood = selectedMetric === 'emptySessions' || selectedMetric === 'lateCancellations' 
-          ? metricValue < 10 
-          : metricValue > (selectedMetric === 'fillRate' ? 70 : 20);
-        
-        return (
-          <div className={`text-center font-bold ${isGood ? 'text-green-700' : 'text-red-700'}`}>
-            {formatMetricValue(metricValue, selectedMetric)}
-          </div>
-        );
-      },
-      align: 'center' as const,
-      sortable: true
-    },
-    {
-      key: 'yoyChange',
-      header: 'YoY Change',
-      render: (value: number, item: any) => {
-        if (value === 0) return <div className="text-center text-slate-400">N/A</div>;
-        
-        const isPositive = value > 0;
-        const shouldBePositive = selectedMetric !== 'emptySessions' && selectedMetric !== 'lateCancellations';
-        const isGood = shouldBePositive ? isPositive : !isPositive;
-        
-        return (
-          <div className={`text-center font-semibold flex items-center justify-center gap-1 ${
-            isGood ? 'text-green-700' : 'text-red-700'
-          }`}>
-            {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {formatPercentage(value)}
-          </div>
-        );
-      },
-      align: 'center' as const,
-      sortable: true
-    },
-    {
-      key: 'fillRate',
-      header: 'Fill Rate',
-      render: (value: number) => {
-        const colorClass = value >= 80 ? 'text-green-700' : value >= 60 ? 'text-yellow-700' : 'text-red-700';
-        return (
-          <div className={`text-center font-semibold ${colorClass}`}>
-            {value.toFixed(1)}%
-          </div>
-        );
-      },
-      align: 'center' as const,
-      sortable: true
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
     }
-  ];
+  };
+
+  const sortedData = [...processedData].sort((a, b) => {
+    if (!sortField) return 0;
+    
+    let aValue, bValue;
+    
+    if (sortField === 'trainer') {
+      aValue = a.trainer;
+      bValue = b.trainer;
+    } else if (uniqueYears.includes(sortField)) {
+      aValue = getMetricValue(a.yearlyData[sortField], selectedMetric);
+      bValue = getMetricValue(b.yearlyData[sortField], selectedMetric);
+    } else {
+      aValue = a[sortField];
+      bValue = b[sortField];
+    }
+    
+    if (typeof aValue === 'string') {
+      return sortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+    }
+    
+    return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+  });
+
+  const calculateYoYChange = (currentYear: string, previousYear: string, row: any) => {
+    const currentValue = getMetricValue(row.yearlyData[currentYear], selectedMetric);
+    const previousValue = getMetricValue(row.yearlyData[previousYear], selectedMetric);
+    
+    if (previousValue === 0) return 0;
+    return ((currentValue - previousValue) / previousValue) * 100;
+  };
 
   return (
     <Card className="bg-white shadow-sm border border-gray-200">
@@ -218,10 +160,10 @@ export const RecurringClassYearOnYearTable: React.FC<RecurringClassYearOnYearTab
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Calendar className="w-6 h-6 text-blue-600" />
-            Year-on-Year Comparison
+            Year-on-Year Performance
           </CardTitle>
           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit">
-            {formatNumber(yearOnYearData.length)} trainer-years
+            {formatNumber(processedData.length)} class schedules
           </Badge>
         </div>
       </CardHeader>
@@ -232,13 +174,118 @@ export const RecurringClassYearOnYearTable: React.FC<RecurringClassYearOnYearTab
           onValueChange={setSelectedMetric}
         />
         
-        <ModernDataTable
-          data={yearOnYearData}
-          columns={columns}
-          headerGradient="from-blue-600 to-blue-700"
-          maxHeight="600px"
-          stickyHeader
-        />
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                <TableHead 
+                  className="font-bold text-white cursor-pointer hover:bg-white/10 sticky left-0 bg-blue-600 z-10 min-w-[280px]"
+                  onClick={() => handleSort('trainer')}
+                >
+                  <div className="flex items-center gap-1">
+                    Trainer / Class / Schedule
+                    {sortField === 'trainer' && (
+                      sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                    )}
+                  </div>
+                </TableHead>
+                {uniqueYears.map((year) => (
+                  <TableHead 
+                    key={year}
+                    className="font-bold text-white text-center cursor-pointer hover:bg-white/10 min-w-[120px]"
+                    onClick={() => handleSort(year)}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      {year}
+                      {sortField === year && (
+                        sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                      )}
+                    </div>
+                  </TableHead>
+                ))}
+                {uniqueYears.length >= 2 && (
+                  <TableHead className="font-bold text-white text-center min-w-[100px]">
+                    YoY Change
+                  </TableHead>
+                )}
+                <TableHead className="font-bold text-white text-center min-w-[100px]">
+                  Total
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedData.map((row, index) => {
+                const yoyChange = uniqueYears.length >= 2 
+                  ? calculateYoYChange(uniqueYears[0], uniqueYears[1], row)
+                  : 0;
+                
+                return (
+                  <TableRow 
+                    key={index} 
+                    className="hover:bg-slate-50/80 transition-colors border-b cursor-pointer"
+                    onClick={() => onRowClick?.(row.trainer, row)}
+                  >
+                    <TableCell className="sticky left-0 bg-white z-10 border-r">
+                      <div className="space-y-1">
+                        <div className="font-semibold text-slate-900">{row.trainer}</div>
+                        <div className="text-sm text-blue-600 font-medium">{row.class}</div>
+                        <div className="text-xs text-slate-500">{row.day} • {row.time}</div>
+                        <div className="text-xs text-slate-400">{row.location}</div>
+                      </div>
+                    </TableCell>
+                    {uniqueYears.map((year) => {
+                      const yearData = row.yearlyData[year];
+                      const value = getMetricValue(yearData, selectedMetric);
+                      const isGood = selectedMetric === 'emptySessions' || selectedMetric === 'lateCancellations' 
+                        ? value < 5 
+                        : value > (selectedMetric === 'fillRate' ? 60 : 10);
+                      
+                      return (
+                        <TableCell key={year} className="text-center">
+                          {yearData ? (
+                            <div className={cn(
+                              "font-semibold",
+                              isGood ? 'text-green-700' : 'text-red-700'
+                            )}>
+                              {formatMetricValue(value, selectedMetric)}
+                            </div>
+                          ) : (
+                            <div className="text-slate-400">-</div>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                    {uniqueYears.length >= 2 && (
+                      <TableCell className="text-center">
+                        <div className={cn(
+                          "font-semibold flex items-center justify-center gap-1",
+                          yoyChange >= 0 ? 'text-green-700' : 'text-red-700'
+                        )}>
+                          {yoyChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          {formatPercentage(yoyChange)}
+                        </div>
+                      </TableCell>
+                    )}
+                    <TableCell className="text-center">
+                      <div className="font-bold text-slate-700">
+                        {formatMetricValue(
+                          selectedMetric === 'revenue' ? row.totalRevenue :
+                          selectedMetric === 'attendance' ? row.totalAttendance :
+                          selectedMetric === 'sessions' ? row.totalSessions :
+                          selectedMetric === 'capacity' ? row.totalCapacity :
+                          selectedMetric === 'fillRate' ? row.fillRate :
+                          selectedMetric === 'classAverage' ? row.classAverage :
+                          row.totalSessions,
+                          selectedMetric
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
