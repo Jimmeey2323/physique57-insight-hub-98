@@ -14,28 +14,31 @@ import { SourceDataModal } from '@/components/ui/SourceDataModal';
 import { RecurringClassMetricCards } from '@/components/dashboard/RecurringClassMetricCards';
 import { RecurringClassLocationSelector } from '@/components/dashboard/RecurringClassLocationSelector';
 import { RecurringClassFilterSection } from '@/components/dashboard/RecurringClassFilterSection';
-import { RecurringClassDetailedDataTable } from '@/components/dashboard/RecurringClassDetailedDataTable';
+import { RecurringClassMonthOnMonthTable } from '@/components/dashboard/RecurringClassMonthOnMonthTable';
+import { RecurringClassYearOnYearTable } from '@/components/dashboard/RecurringClassYearOnYearTable';
+import { RecurringClassTopBottomLists } from '@/components/dashboard/RecurringClassTopBottomLists';
 import { formatNumber } from '@/utils/formatters';
 
 const ClassAttendance = () => {
   const { data, loading, error } = useTeacherRecurringData();
   const { isLoading, setLoading } = useGlobalLoading();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('month-on-month');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [openSource, setOpenSource] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
   const [filters, setFilters] = useState({
     dateRange: { start: '', end: '' },
-    location: [],
-    trainer: [],
-    classType: [],
-    dayOfWeek: [],
-    timeSlot: [],
-    minCapacity: undefined,
-    maxCapacity: undefined,
-    minFillRate: undefined,
-    maxFillRate: undefined
+    location: [] as string[],
+    trainer: [] as string[],
+    classType: [] as string[],
+    dayOfWeek: [] as string[],
+    timeSlot: [] as string[],
+    minCapacity: undefined as number | undefined,
+    maxCapacity: undefined as number | undefined,
+    minFillRate: undefined as number | undefined,
+    maxFillRate: undefined as number | undefined
   });
 
   useEffect(() => {
@@ -63,6 +66,18 @@ const ClassAttendance = () => {
           item.location?.toLowerCase().includes(targetLocation.toLowerCase())
         );
       }
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(item =>
+        item.trainer?.toLowerCase().includes(searchLower) ||
+        item.sessionName?.toLowerCase().includes(searchLower) ||
+        item.location?.toLowerCase().includes(searchLower) ||
+        item.type?.toLowerCase().includes(searchLower) ||
+        item.class?.toLowerCase().includes(searchLower)
+      );
     }
 
     // Apply other filters
@@ -118,7 +133,7 @@ const ClassAttendance = () => {
     }
 
     return filtered;
-  }, [data, selectedLocation, filters]);
+  }, [data, selectedLocation, filters, searchTerm]);
 
   // Calculate header metrics
   const headerMetrics = useMemo(() => {
@@ -155,7 +170,6 @@ const ClassAttendance = () => {
       <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 text-white">
         <div className="absolute inset-0 bg-black/20" />
         
-        {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-4 -left-4 w-32 h-32 bg-white/10 rounded-full animate-pulse"></div>
           <div className="absolute top-20 right-10 w-24 h-24 bg-indigo-300/20 rounded-full animate-bounce delay-1000"></div>
@@ -190,7 +204,6 @@ const ClassAttendance = () => {
                 Comprehensive analysis of recurring class performance, trainer effectiveness, and attendance patterns
               </p>
               
-              {/* Key Metrics Display */}
               <div className="flex items-center justify-center gap-12 mt-8">
                 <div className="text-center">
                   <div className="text-4xl font-bold text-white mb-2">{headerMetrics.totalClasses}</div>
@@ -241,56 +254,60 @@ const ClassAttendance = () => {
           />
         </div>
 
-        {/* Main Content Tabs */}
+        {/* Filter Section */}
+        <div className="mb-8">
+          <RecurringClassFilterSection
+            data={data || []}
+            filters={filters}
+            onFiltersChange={setFilters}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            isCollapsed={isFiltersCollapsed}
+            onToggleCollapse={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+          />
+        </div>
+
+        {/* Overview Cards */}
+        <div className="mb-8">
+          <RecurringClassMetricCards data={filteredData} />
+        </div>
+
+        {/* Analysis Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 bg-white border border-gray-200 p-1 rounded-xl shadow-sm h-14">
             <TabsTrigger
-              value="overview"
+              value="month-on-month"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-gray-50 data-[state=active]:hover:bg-blue-700"
+            >
+              <Calendar className="w-4 h-4" />
+              Month-on-Month
+            </TabsTrigger>
+            <TabsTrigger
+              value="year-on-year"
               className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-gray-50 data-[state=active]:hover:bg-blue-700"
             >
               <BarChart3 className="w-4 h-4" />
-              Overview
+              Year-on-Year
             </TabsTrigger>
             <TabsTrigger
-              value="performance"
+              value="rankings"
               className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-gray-50 data-[state=active]:hover:bg-blue-700"
             >
               <Target className="w-4 h-4" />
-              Performance
-            </TabsTrigger>
-            <TabsTrigger
-              value="detailed"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-gray-50 data-[state=active]:hover:bg-blue-700"
-            >
-              <Users className="w-4 h-4" />
-              Detailed View
+              Rankings & Insights
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-8">
-            <RecurringClassMetricCards data={filteredData} />
+          <TabsContent value="month-on-month" className="space-y-8">
+            <RecurringClassMonthOnMonthTable data={filteredData} />
           </TabsContent>
 
-          <TabsContent value="performance" className="space-y-8">
-            <RecurringClassFilterSection
-              data={data || []}
-              filters={filters}
-              onFiltersChange={setFilters}
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-            />
-            <RecurringClassMetricCards data={filteredData} />
+          <TabsContent value="year-on-year" className="space-y-8">
+            <RecurringClassYearOnYearTable data={filteredData} />
           </TabsContent>
 
-          <TabsContent value="detailed" className="space-y-8">
-            <RecurringClassFilterSection
-              data={data || []}
-              filters={filters}
-              onFiltersChange={setFilters}
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-            />
-            <RecurringClassDetailedDataTable data={filteredData} />
+          <TabsContent value="rankings" className="space-y-8">
+            <RecurringClassTopBottomLists data={filteredData} />
           </TabsContent>
         </Tabs>
       </div>
