@@ -1,359 +1,219 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { SectionLayout } from '@/components/layout/SectionLayout';
-import { RefinedLoader } from '@/components/ui/RefinedLoader';
-import { useTeacherRecurringData } from '@/hooks/useTeacherRecurringData';
-import { useGlobalLoading } from '@/hooks/useGlobalLoading';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Home, Calendar, BarChart3, Users, Target, Database, Eye } from 'lucide-react';
-import { Footer } from '@/components/ui/footer';
-import { SourceDataModal } from '@/components/ui/SourceDataModal';
-import { RecurringClassMetricCards } from '@/components/dashboard/RecurringClassMetricCards';
-import { RecurringClassLocationSelector } from '@/components/dashboard/RecurringClassLocationSelector';
+import { useTeacherRecurringData } from '@/hooks/useTeacherRecurringData';
 import { RecurringClassFilterSection } from '@/components/dashboard/RecurringClassFilterSection';
+import { RecurringClassMetricCards } from '@/components/dashboard/RecurringClassMetricCards';
+import { RecurringClassDetailedDataTable } from '@/components/dashboard/RecurringClassDetailedDataTable';
 import { RecurringClassMonthOnMonthTable } from '@/components/dashboard/RecurringClassMonthOnMonthTable';
 import { RecurringClassYearOnYearTable } from '@/components/dashboard/RecurringClassYearOnYearTable';
 import { RecurringClassTopBottomLists } from '@/components/dashboard/RecurringClassTopBottomLists';
-import { formatNumber } from '@/utils/formatters';
+import { RecurringClassFilterOptions } from '@/types/recurringClass';
 
 const ClassAttendance = () => {
   const { data, loading, error } = useTeacherRecurringData();
-  const { isLoading, setLoading } = useGlobalLoading();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('month-on-month');
-  const [selectedLocation, setSelectedLocation] = useState('all');
-  const [openSource, setOpenSource] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
-  const [filters, setFilters] = useState({
-    dateRange: { start: '', end: '' },
-    location: [] as string[],
-    trainer: [] as string[],
-    classType: [] as string[],
-    dayOfWeek: [] as string[],
-    timeSlot: [] as string[],
-    minCapacity: undefined as number | undefined,
-    maxCapacity: undefined as number | undefined,
-    minFillRate: undefined as number | undefined,
-    maxFillRate: undefined as number | undefined
+  const [filteredData, setFilteredData] = useState(data);
+  
+  const [filters, setFilters] = useState<RecurringClassFilterOptions>({
+    dateRange: {
+      start: '',
+      end: ''
+    },
+    location: [],
+    trainer: [],
+    classType: [],
+    dayOfWeek: [],
+    timeSlot: [],
+    minCapacity: undefined,
+    maxCapacity: undefined,
+    minFillRate: undefined,
+    maxFillRate: undefined,
+    minRevenue: undefined,
+    maxRevenue: undefined,
+    showEmptyOnly: false,
+    showProblematicOnly: false
   });
 
+  // Apply filters to data
   useEffect(() => {
-    setLoading(loading, 'Processing recurring class performance analytics...');
-  }, [loading, setLoading]);
+    let filtered = [...data];
 
-  // Filter data based on location and other filters
-  const filteredData = useMemo(() => {
-    if (!data) return [];
-    
-    let filtered = data;
-
-    // Apply location filter
-    if (selectedLocation !== 'all') {
-      const locationMappings = {
-        'kwality': 'Kwality House, Kemps Corner',
-        'supreme': 'Supreme HQ, Bandra',
-        'kenkere': 'Kenkere House'
-      };
-      
-      const targetLocation = locationMappings[selectedLocation as keyof typeof locationMappings];
-      if (targetLocation) {
-        filtered = filtered.filter(item => 
-          item.location === targetLocation || 
-          item.location?.toLowerCase().includes(targetLocation.toLowerCase())
-        );
-      }
+    // Date range filter
+    if (filters.dateRange.start && filters.dateRange.end) {
+      const startDate = new Date(filters.dateRange.start);
+      const endDate = new Date(filters.dateRange.end);
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= startDate && itemDate <= endDate;
+      });
     }
 
-    // Apply search filter
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(item =>
-        item.trainer?.toLowerCase().includes(searchLower) ||
-        item.sessionName?.toLowerCase().includes(searchLower) ||
-        item.location?.toLowerCase().includes(searchLower) ||
-        item.type?.toLowerCase().includes(searchLower) ||
-        item.class?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Apply other filters
+    // Location filter
     if (filters.location.length > 0) {
       filtered = filtered.filter(item => filters.location.includes(item.location));
     }
 
+    // Trainer filter
     if (filters.trainer.length > 0) {
       filtered = filtered.filter(item => filters.trainer.includes(item.trainer));
     }
 
+    // Class type filter
     if (filters.classType.length > 0) {
-      filtered = filtered.filter(item => filters.classType.includes(item.type));
+      filtered = filtered.filter(item => filters.classType.includes(item.class));
     }
 
+    // Day of week filter
     if (filters.dayOfWeek.length > 0) {
       filtered = filtered.filter(item => filters.dayOfWeek.includes(item.day));
     }
 
-    if (filters.dateRange.start || filters.dateRange.end) {
-      const startDate = filters.dateRange.start ? new Date(filters.dateRange.start) : null;
-      const endDate = filters.dateRange.end ? new Date(filters.dateRange.end) : null;
+    // Time slot filter
+    if (filters.timeSlot.length > 0) {
+      const timeSlotMapping: Record<string, [number, number]> = {
+        'Early Morning': [5, 8],
+        'Morning': [8, 12],
+        'Afternoon': [12, 17],
+        'Evening': [17, 21],
+        'Night': [21, 24]
+      };
 
       filtered = filtered.filter(item => {
-        if (!item.date) return false;
-        const itemDate = new Date(item.date);
-        if (startDate && itemDate < startDate) return false;
-        if (endDate && itemDate > endDate) return false;
-        return true;
+        const timeStr = item.time;
+        const [hours] = timeStr.split(':').map(Number);
+        
+        return filters.timeSlot.some(slot => {
+          const [start, end] = timeSlotMapping[slot] || [0, 24];
+          return hours >= start && hours < end;
+        });
       });
     }
 
+    // Capacity filters
     if (filters.minCapacity !== undefined) {
       filtered = filtered.filter(item => item.capacity >= filters.minCapacity!);
     }
-
     if (filters.maxCapacity !== undefined) {
       filtered = filtered.filter(item => item.capacity <= filters.maxCapacity!);
     }
 
+    // Fill rate filters
     if (filters.minFillRate !== undefined) {
       filtered = filtered.filter(item => {
-        const fillRate = parseFloat(item.fillRate.replace('%', '')) || 0;
+        const fillRate = item.capacity > 0 ? (item.checkedIn / item.capacity) * 100 : 0;
         return fillRate >= filters.minFillRate!;
       });
     }
-
     if (filters.maxFillRate !== undefined) {
       filtered = filtered.filter(item => {
-        const fillRate = parseFloat(item.fillRate.replace('%', '')) || 0;
+        const fillRate = item.capacity > 0 ? (item.checkedIn / item.capacity) * 100 : 0;
         return fillRate <= filters.maxFillRate!;
       });
     }
 
-    return filtered;
-  }, [data, selectedLocation, filters, searchTerm]);
+    // Revenue filters
+    if (filters.minRevenue !== undefined) {
+      filtered = filtered.filter(item => item.revenue >= filters.minRevenue!);
+    }
+    if (filters.maxRevenue !== undefined) {
+      filtered = filtered.filter(item => item.revenue <= filters.maxRevenue!);
+    }
 
-  // Calculate header metrics
-  const headerMetrics = useMemo(() => {
-    const totalClasses = filteredData.length;
-    const totalAttendance = filteredData.reduce((sum, item) => sum + item.checkedIn, 0);
-    const totalCapacity = filteredData.reduce((sum, item) => sum + item.capacity, 0);
-    const avgFillRate = totalCapacity > 0 ? Math.round((totalAttendance / totalCapacity) * 100) : 0;
+    // Special filters
+    if (filters.showEmptyOnly) {
+      filtered = filtered.filter(item => item.checkedIn === 0);
+    }
+    if (filters.showProblematicOnly) {
+      filtered = filtered.filter(item => {
+        const fillRate = item.capacity > 0 ? (item.checkedIn / item.capacity) * 100 : 0;
+        return fillRate < 30 || item.lateCancelled > 3;
+      });
+    }
 
-    return {
-      totalClasses: formatNumber(totalClasses),
-      totalAttendance: formatNumber(totalAttendance),
-      avgFillRate: `${avgFillRate}%`
-    };
-  }, [filteredData]);
+    setFilteredData(filtered);
+  }, [data, filters]);
 
-  if (isLoading) {
-    return <RefinedLoader subtitle="Processing recurring class performance analytics..." />;
+  const handleFilterChange = (newFilters: RecurringClassFilterOptions) => {
+    setFilters(newFilters);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-slate-600">Loading recurring class data...</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/20 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Data</h2>
-          <p className="text-slate-600">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-12">
+            <p className="text-red-600 text-lg font-semibold">Error loading data: {error}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/20">
-      {/* Header Section */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 text-white">
-        <div className="absolute inset-0 bg-black/20" />
-        
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-4 -left-4 w-32 h-32 bg-white/10 rounded-full animate-pulse"></div>
-          <div className="absolute top-20 right-10 w-24 h-24 bg-indigo-300/20 rounded-full animate-bounce delay-1000"></div>
-          <div className="absolute bottom-10 left-20 w-40 h-40 bg-purple-300/10 rounded-full animate-pulse delay-500"></div>
-        </div>
-        
-        <div className="relative px-8 py-12">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-8">
-              <Button 
-                onClick={() => navigate('/')} 
-                variant="outline" 
-                size="sm" 
-                className="gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 hover:border-white/30 transition-all duration-200"
-              >
-                <Home className="w-4 h-4" />
-                Dashboard
-              </Button>
-            </div>
-            
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-full px-6 py-2 border border-white/20 animate-fade-in-up">
-                <Calendar className="w-5 h-5" />
-                <span className="font-medium">Recurring Class Analytics</span>
-              </div>
-              
-              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-white via-indigo-100 to-purple-100 bg-clip-text text-transparent animate-fade-in-up delay-200">
-                Recurring Class Performance
-              </h1>
-              
-              <p className="text-xl text-indigo-100 max-w-2xl mx-auto leading-relaxed animate-fade-in-up delay-300">
-                Comprehensive analysis of recurring class performance, trainer effectiveness, and attendance patterns
-              </p>
-              
-              <div className="flex items-center justify-center gap-12 mt-8">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-white mb-2">{headerMetrics.totalClasses}</div>
-                  <div className="text-sm text-slate-300 font-medium">Total Classes</div>
-                </div>
-                <div className="w-px h-16 bg-white/20" />
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-white mb-2">{headerMetrics.totalAttendance}</div>
-                  <div className="text-sm text-slate-300 font-medium">Total Attendance</div>
-                </div>
-                <div className="w-px h-16 bg-white/20" />
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-white mb-2">{headerMetrics.avgFillRate}</div>
-                  <div className="text-sm text-slate-300 font-medium">Avg Fill Rate</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-6 py-8">
-        {/* Data Source Info */}
-        <div className="flex justify-between items-center mb-6 animate-fade-in">
-          <div className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-indigo-600" />
-            <span className="text-sm font-medium text-slate-700">Data Source: Teacher Recurring Sheet</span>
-            <Badge variant="outline" className="text-indigo-700 border-indigo-200">
-              149ILDqovzZA6FRUJKOwzutWdVqmqWBtWPfzG3A0zxTI
-            </Badge>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
-            onClick={() => setOpenSource(true)}
-          >
-            <Eye className="w-4 h-4" />
-            View Source Data
-          </Button>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-slate-800 mb-2">
+            Recurring Class Performance
+          </h1>
+          <p className="text-slate-600 text-lg">
+            Comprehensive analytics for class attendance, trainer performance, and revenue metrics
+          </p>
         </div>
 
-        {/* Location Selector */}
-        <div className="mb-8">
-          <RecurringClassLocationSelector
-            selectedLocation={selectedLocation}
-            onLocationChange={setSelectedLocation}
-          />
-        </div>
+        {/* Comprehensive Filter Section */}
+        <RecurringClassFilterSection
+          data={data}
+          onFiltersChange={handleFilterChange}
+          className="mb-6"
+        />
 
-        {/* Filter Section */}
-        <div className="mb-8">
-          <RecurringClassFilterSection
-            data={data || []}
-            filters={filters}
-            onFiltersChange={setFilters}
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            isCollapsed={isFiltersCollapsed}
-            onToggleCollapse={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
-          />
-        </div>
+        {/* Metric Cards */}
+        <RecurringClassMetricCards data={filteredData} />
 
-        {/* Overview Cards */}
-        <div className="mb-8">
-          <RecurringClassMetricCards data={filteredData} />
-        </div>
-
-        {/* Analysis Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 bg-white border border-gray-200 p-1 rounded-xl shadow-sm h-14">
-            <TabsTrigger
-              value="month-on-month"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-gray-50 data-[state=active]:hover:bg-blue-700"
-            >
-              <Calendar className="w-4 h-4" />
-              Month-on-Month
+        {/* Main Content Tabs */}
+        <Tabs defaultValue="tables" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="tables" className="text-sm font-medium">
+              Performance Tables
             </TabsTrigger>
-            <TabsTrigger
-              value="year-on-year"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-gray-50 data-[state=active]:hover:bg-blue-700"
-            >
-              <BarChart3 className="w-4 h-4" />
-              Year-on-Year
+            <TabsTrigger value="rankings" className="text-sm font-medium">
+              Rankings & Analysis
             </TabsTrigger>
-            <TabsTrigger
-              value="rankings"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-gray-50 data-[state=active]:hover:bg-blue-700"
-            >
-              <Target className="w-4 h-4" />
-              Rankings & Insights
+            <TabsTrigger value="detailed" className="text-sm font-medium">
+              Detailed View
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="month-on-month" className="space-y-8">
-            <RecurringClassMonthOnMonthTable data={filteredData} />
+          <TabsContent value="tables" className="space-y-6">
+            <div className="grid gap-6">
+              <RecurringClassMonthOnMonthTable data={filteredData} />
+              <RecurringClassYearOnYearTable data={filteredData} />
+            </div>
           </TabsContent>
 
-          <TabsContent value="year-on-year" className="space-y-8">
-            <RecurringClassYearOnYearTable data={filteredData} />
-          </TabsContent>
-
-          <TabsContent value="rankings" className="space-y-8">
+          <TabsContent value="rankings" className="space-y-6">
             <RecurringClassTopBottomLists data={filteredData} />
+          </TabsContent>
+
+          <TabsContent value="detailed" className="space-y-6">
+            <RecurringClassDetailedDataTable data={filteredData} />
           </TabsContent>
         </Tabs>
       </div>
-      
-      <Footer />
-
-      {/* Source Data Modal */}
-      <SourceDataModal
-        open={openSource}
-        onOpenChange={setOpenSource}
-        sources={[{
-          name: 'Teacher Recurring',
-          sheetName: 'Teacher Recurring',
-          spreadsheetId: '149ILDqovzZA6FRUJKOwzutWdVqmqWBtWPfzG3A0zxTI',
-          data: data || []
-        }]}
-      />
-
-      <style>{`
-        @keyframes fade-in-up {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        .animate-fade-in-up {
-          animation: fade-in-up 0.6s ease-out forwards;
-        }
-        
-        .delay-200 {
-          animation-delay: 0.2s;
-        }
-        
-        .delay-300 {
-          animation-delay: 0.3s;
-        }
-        
-        .delay-500 {
-          animation-delay: 0.5s;
-        }
-      `}</style>
     </div>
   );
 };

@@ -13,6 +13,30 @@ interface RecurringClassYearOnYearTableProps {
   onRowClick?: (trainer: string, yearData: any) => void;
 }
 
+// Move helper functions outside of component to avoid hoisting issues
+const getMetricValue = (item: any, metric: RecurringClassMetricType) => {
+  switch (metric) {
+    case 'attendance': return item.totalAttendance;
+    case 'revenue': return item.totalRevenue;
+    case 'fillRate': return item.fillRate;
+    case 'classAverage': return item.classAverage;
+    case 'emptySessions': return item.totalEmpty;
+    case 'lateCancellations': return item.totalLateCancelled;
+    case 'capacity': return item.totalCapacity;
+    case 'sessions': return item.totalSessions;
+    default: return 0;
+  }
+};
+
+const formatMetricValue = (value: number, metric: RecurringClassMetricType) => {
+  switch (metric) {
+    case 'revenue': return formatCurrency(value);
+    case 'fillRate': return `${value.toFixed(1)}%`;
+    case 'classAverage': return value.toFixed(1);
+    default: return formatNumber(value);
+  }
+};
+
 export const RecurringClassYearOnYearTable: React.FC<RecurringClassYearOnYearTableProps> = ({
   data,
   onRowClick
@@ -93,29 +117,6 @@ export const RecurringClassYearOnYearTable: React.FC<RecurringClassYearOnYearTab
       return parseInt(b.year) - parseInt(a.year);
     });
   }, [data, selectedMetric]);
-
-  const getMetricValue = (item: any, metric: RecurringClassMetricType) => {
-    switch (metric) {
-      case 'attendance': return item.totalAttendance;
-      case 'revenue': return item.totalRevenue;
-      case 'fillRate': return item.fillRate;
-      case 'classAverage': return item.classAverage;
-      case 'emptySessions': return item.totalEmpty;
-      case 'lateCancellations': return item.totalLateCancelled;
-      case 'capacity': return item.totalCapacity;
-      case 'sessions': return item.totalSessions;
-      default: return 0;
-    }
-  };
-
-  const formatMetricValue = (value: number, metric: RecurringClassMetricType) => {
-    switch (metric) {
-      case 'revenue': return formatCurrency(value);
-      case 'fillRate': return `${value.toFixed(1)}%`;
-      case 'classAverage': return value.toFixed(1);
-      default: return formatNumber(value);
-    }
-  };
 
   const columns = [
     {
