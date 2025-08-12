@@ -1,379 +1,409 @@
+
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TeacherRecurringData } from '@/hooks/useTeacherRecurringData';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Area, AreaChart, RadialBarChart, RadialBar
-} from 'recharts';
-import { TrendingUp, BarChart3, PieChart as PieChartIcon, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Calendar, BarChart3, PieChart, Target, Activity } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { cn } from '@/lib/utils';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart as RechartsPieChart,
+  Cell,
+  RadialBarChart,
+  RadialBar,
+  LineChart,
+  Line
+} from 'recharts';
 
 interface RecurringClassAnimatedChartsProps {
   data: TeacherRecurringData[];
 }
 
-type ChartType = 'trends' | 'distribution' | 'performance' | 'comparison';
+type ChartType = 'attendance' | 'revenue' | 'fillRate' | 'trends';
 
 export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedChartsProps> = ({
   data
 }) => {
-  const [selectedChart, setSelectedChart] = useState<ChartType>('trends');
+  const [selectedChart, setSelectedChart] = useState<ChartType>('attendance');
 
-  // Process data for trend analysis (monthly)
-  const trendData = useMemo(() => {
-    const monthlyData: Record<string, any> = {};
-    
-    data.forEach(item => {
-      const month = new Date(item.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      
-      if (!monthlyData[month]) {
-        monthlyData[month] = {
+  const chartData = useMemo(() => {
+    if (!data.length) return { attendanceData: [], revenueData: [], fillRateData: [], trendsData: [] };
+
+    // Group by month for trends
+    const monthlyData = data.reduce((acc, item) => {
+      const month = new Date(item.date).toISOString().slice(0, 7);
+      if (!acc[month]) {
+        acc[month] = {
           month,
-          sessions: 0,
-          attendance: 0,
-          revenue: 0,
-          capacity: 0,
-          emptySessions: 0
+          totalAttendance: 0,
+          totalRevenue: 0,
+          totalCapacity: 0,
+          totalSessions: 0,
+          uniqueClasses: new Set()
         };
       }
-      
-      monthlyData[month].sessions += 1;
-      monthlyData[month].attendance += item.checkedIn;
-      monthlyData[month].revenue += item.revenue;
-      monthlyData[month].capacity += item.capacity;
-      monthlyData[month].emptySessions += item.emptySessions;
-    });
+      acc[month].totalAttendance += item.checkedIn;
+      acc[month].totalRevenue += item.revenue;
+      acc[month].totalCapacity += item.capacity;
+      acc[month].totalSessions += 1;
+      acc[month].uniqueClasses.add(item.class);
+      return acc;
+    }, {} as Record<string, any>);
 
-    return Object.values(monthlyData)
+    const trendsData = Object.values(monthlyData)
       .map((month: any) => ({
         ...month,
-        fillRate: month.capacity > 0 ? (month.attendance / month.capacity) * 100 : 0,
-        avgAttendance: month.sessions > 0 ? month.attendance / month.sessions : 0
+        fillRate: month.totalCapacity > 0 ? (month.totalAttendance / month.totalCapacity) * 100 : 0,
+        avgAttendance: month.totalSessions > 0 ? month.totalAttendance / month.totalSessions : 0,
+        classCount: month.uniqueClasses.size,
+        monthName: new Date(month.month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
       }))
-      .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
-  }, [data]);
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-6); // Last 6 months
 
-  // Process data for class format distribution
-  const formatDistribution = useMemo(() => {
-    const formatData: Record<string, any> = {};
-    
-    data.forEach(item => {
-      if (!formatData[item.class]) {
-        formatData[item.class] = {
+    // Top classes by attendance
+    const classStats = data.reduce((acc, item) => {
+      if (!acc[item.class]) {
+        acc[item.class] = {
           name: item.class,
-          sessions: 0,
-          attendance: 0,
-          revenue: 0,
-          capacity: 0
+          totalAttendance: 0,
+          totalRevenue: 0,
+          totalCapacity: 0,
+          totalSessions: 0
         };
       }
-      
-      formatData[item.class].sessions += 1;
-      formatData[item.class].attendance += item.checkedIn;
-      formatData[item.class].revenue += item.revenue;
-      formatData[item.class].capacity += item.capacity;
-    });
+      acc[item.class].totalAttendance += item.checkedIn;
+      acc[item.class].totalRevenue += item.revenue;
+      acc[item.class].totalCapacity += item.capacity;
+      acc[item.class].totalSessions += 1;
+      return acc;
+    }, {} as Record<string, any>);
 
-    return Object.values(formatData).map((format: any) => ({
-      ...format,
-      fillRate: format.capacity > 0 ? (format.attendance / format.capacity) * 100 : 0
-    }));
-  }, [data]);
+    const attendanceData = Object.values(classStats)
+      .map((cls: any) => ({
+        ...cls,
+        fillRate: cls.totalCapacity > 0 ? (cls.totalAttendance / cls.totalCapacity) * 100 : 0,
+        avgAttendance: cls.totalSessions > 0 ? cls.totalAttendance / cls.totalSessions : 0
+      }))
+      .sort((a: any, b: any) => b.totalAttendance - a.totalAttendance)
+      .slice(0, 8);
 
-  // Process data for trainer performance
-  const trainerPerformance = useMemo(() => {
-    const trainerData: Record<string, any> = {};
-    
-    data.forEach(item => {
-      if (!trainerData[item.trainer]) {
-        trainerData[item.trainer] = {
+    const revenueData = Object.values(classStats)
+      .map((cls: any) => ({
+        ...cls,
+        avgRevenue: cls.totalSessions > 0 ? cls.totalRevenue / cls.totalSessions : 0
+      }))
+      .sort((a: any, b: any) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 8);
+
+    // Trainer performance
+    const trainerStats = data.reduce((acc, item) => {
+      if (!acc[item.trainer]) {
+        acc[item.trainer] = {
           name: item.trainer,
-          sessions: 0,
-          attendance: 0,
-          revenue: 0,
-          capacity: 0,
-          emptySessions: 0
+          totalAttendance: 0,
+          totalRevenue: 0,
+          totalCapacity: 0,
+          totalSessions: 0
         };
       }
-      
-      trainerData[item.trainer].sessions += 1;
-      trainerData[item.trainer].attendance += item.checkedIn;
-      trainerData[item.trainer].revenue += item.revenue;
-      trainerData[item.trainer].capacity += item.capacity;
-      trainerData[item.trainer].emptySessions += item.emptySessions;
-    });
+      acc[item.trainer].totalAttendance += item.checkedIn;
+      acc[item.trainer].totalRevenue += item.revenue;
+      acc[item.trainer].totalCapacity += item.capacity;
+      acc[item.trainer].totalSessions += 1;
+      return acc;
+    }, {} as Record<string, any>);
 
-    return Object.values(trainerData)
+    const fillRateData = Object.values(trainerStats)
       .map((trainer: any) => ({
         ...trainer,
-        fillRate: trainer.capacity > 0 ? (trainer.attendance / trainer.capacity) * 100 : 0,
-        avgAttendance: trainer.sessions > 0 ? trainer.attendance / trainer.sessions : 0,
-        revenuePerSession: trainer.sessions > 0 ? trainer.revenue / trainer.sessions : 0
+        fillRate: trainer.totalCapacity > 0 ? (trainer.totalAttendance / trainer.totalCapacity) * 100 : 0,
+        avgAttendance: trainer.totalSessions > 0 ? trainer.totalAttendance / trainer.totalSessions : 0
       }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10);
+      .sort((a: any, b: any) => b.fillRate - a.fillRate)
+      .slice(0, 8);
+
+    return { attendanceData, revenueData, fillRateData, trendsData };
   }, [data]);
 
-  // Time slot comparison
-  const timeSlotData = useMemo(() => {
-    const timeSlots: Record<string, any> = {};
-    
-    data.forEach(item => {
-      const hour = parseInt(item.time.split(':')[0]);
-      let timeSlot: string;
-      
-      if (hour < 8) timeSlot = 'Early Morning';
-      else if (hour < 12) timeSlot = 'Morning';
-      else if (hour < 17) timeSlot = 'Afternoon';
-      else if (hour < 21) timeSlot = 'Evening';
-      else timeSlot = 'Night';
-      
-      if (!timeSlots[timeSlot]) {
-        timeSlots[timeSlot] = {
-          timeSlot,
-          sessions: 0,
-          attendance: 0,
-          capacity: 0,
-          revenue: 0
-        };
-      }
-      
-      timeSlots[timeSlot].sessions += 1;
-      timeSlots[timeSlot].attendance += item.checkedIn;
-      timeSlots[timeSlot].capacity += item.capacity;
-      timeSlots[timeSlot].revenue += item.revenue;
-    });
-
-    return Object.values(timeSlots).map((slot: any) => ({
-      ...slot,
-      fillRate: slot.capacity > 0 ? (slot.attendance / slot.capacity) * 100 : 0
-    }));
-  }, [data]);
-
-  const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1', '#d084d0'];
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-semibold text-gray-900">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {
-                entry.dataKey === 'revenue' ? formatCurrency(entry.value) :
-                entry.dataKey === 'fillRate' ? `${entry.value.toFixed(1)}%` :
-                formatNumber(entry.value)
-              }
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
+  const chartColors = [
+    '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#84cc16'
+  ];
 
   const renderChart = () => {
     switch (selectedChart) {
-      case 'trends':
+      case 'attendance':
         return (
-          <div className="space-y-6">
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="colorAttendance" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#8884d8" stopOpacity={0.1}/>
-                    </linearGradient>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#82ca9d" stopOpacity={0.1}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="attendance"
-                    stroke="#8884d8"
-                    fillOpacity={1}
-                    fill="url(#colorAttendance)"
-                    animationDuration={1500}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+              <CardHeader>
+                <CardTitle className="text-blue-800 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Class Attendance Volume
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={chartData.attendanceData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                    <XAxis 
+                      dataKey="name" 
+                      tick={{ fontSize: 12, fill: '#1e40af' }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                    />
+                    <YAxis tick={{ fontSize: 12, fill: '#1e40af' }} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#f8fafc', 
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: any, name: string) => [
+                        name === 'totalAttendance' ? formatNumber(value) : value.toFixed(1),
+                        name === 'totalAttendance' ? 'Total Attendance' : 'Avg per Session'
+                      ]}
+                    />
+                    <Bar 
+                      dataKey="totalAttendance" 
+                      fill="#3b82f6"
+                      radius={[4, 4, 0, 0]}
+                      animationDuration={800}
+                    />
+                    <Bar 
+                      dataKey="avgAttendance" 
+                      fill="#06b6d4"
+                      radius={[4, 4, 0, 0]}
+                      animationDuration={1000}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
+              <CardHeader>
+                <CardTitle className="text-purple-800 flex items-center gap-2">
+                  <PieChart className="w-5 h-5" />
+                  Class Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsPieChart>
+                    <Tooltip 
+                      formatter={(value: any) => [formatNumber(value), 'Total Attendance']}
+                    />
+                    <Legend />
+                    <pie
+                      data={chartData.attendanceData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={100}
+                      dataKey="totalAttendance"
+                      animationDuration={1200}
+                    >
+                      {chartData.attendanceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
+                      ))}
+                    </pie>
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case 'revenue':
+        return (
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+            <CardHeader>
+              <CardTitle className="text-green-800 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Revenue Performance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <AreaChart data={chartData.revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#dcfce7" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 12, fill: '#166534' }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
                   />
-                  <Area
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#82ca9d"
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                    animationDuration={1500}
+                  <YAxis tick={{ fontSize: 12, fill: '#166534' }} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#f0fdf4', 
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px'
+                    }}
+                    formatter={(value: any, name: string) => [
+                      name === 'totalRevenue' ? formatCurrency(value) : formatCurrency(value),
+                      name === 'totalRevenue' ? 'Total Revenue' : 'Avg per Session'
+                    ]}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="totalRevenue" 
+                    stackId="1"
+                    stroke="#16a34a" 
+                    fill="#22c55e"
+                    fillOpacity={0.6}
+                    animationDuration={1000}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="avgRevenue" 
+                    stackId="2"
+                    stroke="#059669" 
+                    fill="#10b981"
+                    fillOpacity={0.4}
+                    animationDuration={1200}
                   />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-            
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip content={<CustomTooltip />} />
+            </CardContent>
+          </Card>
+        );
+
+      case 'fillRate':
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="bg-gradient-to-br from-orange-50 to-red-50 border-orange-200">
+              <CardHeader>
+                <CardTitle className="text-orange-800 flex items-center gap-2">
+                  <Target className="w-5 h-5" />
+                  Trainer Fill Rates
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={chartData.fillRateData} layout="horizontal">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#fed7aa" />
+                    <XAxis type="number" tick={{ fontSize: 12, fill: '#c2410c' }} />
+                    <YAxis 
+                      type="category" 
+                      dataKey="name" 
+                      tick={{ fontSize: 10, fill: '#c2410c' }}
+                      width={100}
+                    />
+                    <Tooltip 
+                      formatter={(value: any) => [`${value.toFixed(1)}%`, 'Fill Rate']}
+                    />
+                    <Bar 
+                      dataKey="fillRate" 
+                      fill="#f97316"
+                      radius={[0, 4, 4, 0]}
+                      animationDuration={800}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-cyan-50 to-blue-50 border-cyan-200">
+              <CardHeader>
+                <CardTitle className="text-cyan-800 flex items-center gap-2">
+                  <Activity className="w-5 h-5" />
+                  Fill Rate Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <RadialBarChart cx="50%" cy="50%" innerRadius="20%" outerRadius="90%" data={chartData.fillRateData.slice(0, 5)}>
+                    <RadialBar
+                      label={{ position: 'insideStart', fill: '#fff' }}
+                      background
+                      dataKey="fillRate"
+                      fill="#06b6d4"
+                      animationDuration={1500}
+                    />
+                    <Tooltip formatter={(value: any) => [`${value.toFixed(1)}%`, 'Fill Rate']} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case 'trends':
+        return (
+          <Card className="bg-gradient-to-br from-slate-50 to-gray-50 border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-slate-800 flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                Monthly Trends
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={chartData.trendsData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="monthName" 
+                    tick={{ fontSize: 12, fill: '#475569' }}
+                  />
+                  <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#475569' }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#475569' }} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#f8fafc', 
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Legend />
                   <Line 
+                    yAxisId="left"
                     type="monotone" 
-                    dataKey="fillRate" 
-                    stroke="#ff7300" 
+                    dataKey="totalAttendance" 
+                    stroke="#3b82f6" 
                     strokeWidth={3}
-                    dot={{ fill: '#ff7300', strokeWidth: 2, r: 6 }}
-                    animationDuration={2000}
+                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 6 }}
+                    name="Total Attendance"
+                    animationDuration={1000}
                   />
                   <Line 
+                    yAxisId="left"
                     type="monotone" 
-                    dataKey="avgAttendance" 
-                    stroke="#8dd1e1" 
+                    dataKey="totalRevenue" 
+                    stroke="#10b981" 
                     strokeWidth={3}
-                    dot={{ fill: '#8dd1e1', strokeWidth: 2, r: 6 }}
-                    animationDuration={2000}
+                    dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
+                    name="Total Revenue"
+                    animationDuration={1200}
+                  />
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="fillRate" 
+                    stroke="#f59e0b" 
+                    strokeWidth={3}
+                    dot={{ fill: '#f59e0b', strokeWidth: 2, r: 6 }}
+                    name="Fill Rate %"
+                    animationDuration={1400}
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
-          </div>
-        );
-
-      case 'distribution':
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-80">
-              <h4 className="text-lg font-semibold mb-4 text-center">Class Format Distribution</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={formatDistribution}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="sessions"
-                    animationDuration={1500}
-                    animationBegin={0}
-                  >
-                    {formatDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="h-80">
-              <h4 className="text-lg font-semibold mb-4 text-center">Time Slot Performance</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart cx="50%" cy="50%" innerRadius="20%" outerRadius="90%" data={timeSlotData}>
-                  <RadialBar
-                    label={{ position: 'insideStart', fill: '#fff' }}
-                    background
-                    clockWise
-                    dataKey="fillRate"
-                    fill="#8884d8"
-                    animationDuration={2000}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                </RadialBarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        );
-
-      case 'performance':
-        return (
-          <div className="h-96">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trainerPerformance} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="name" 
-                  angle={-45}
-                  textAnchor="end"
-                  height={100}
-                />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar 
-                  yAxisId="left"
-                  dataKey="attendance" 
-                  fill="#8884d8"
-                  animationDuration={1500}
-                  animationBegin={0}
-                />
-                <Bar 
-                  yAxisId="right"
-                  dataKey="revenue" 
-                  fill="#82ca9d"
-                  animationDuration={1500}
-                  animationBegin={300}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        );
-
-      case 'comparison':
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-80">
-              <h4 className="text-lg font-semibold mb-4 text-center">Fill Rate by Format</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={formatDistribution}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="name" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar 
-                    dataKey="fillRate" 
-                    fill="#ffc658"
-                    animationDuration={2000}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="h-80">
-              <h4 className="text-lg font-semibold mb-4 text-center">Revenue per Session</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trainerPerformance}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="name" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar 
-                    dataKey="revenuePerSession" 
-                    fill="#ff7300"
-                    animationDuration={2000}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         );
 
       default:
@@ -385,27 +415,28 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
     <Card className="bg-white shadow-lg border border-gray-200">
       <CardHeader className="pb-4">
         <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <BarChart3 className="w-6 h-6 text-indigo-600" />
-          Advanced Analytics Charts
+          <BarChart3 className="w-6 h-6 text-purple-600" />
+          Interactive Performance Charts
         </CardTitle>
         
         <div className="flex flex-wrap gap-2 mt-4">
           {[
-            { key: 'trends', label: 'Trends', icon: TrendingUp },
-            { key: 'distribution', label: 'Distribution', icon: PieChartIcon },
-            { key: 'performance', label: 'Performance', icon: BarChart3 },
-            { key: 'comparison', label: 'Comparison', icon: Activity }
-          ].map(({ key, label, icon: Icon }) => (
+            { key: 'attendance', label: 'Attendance', icon: Users, color: 'blue' },
+            { key: 'revenue', label: 'Revenue', icon: TrendingUp, color: 'green' },
+            { key: 'fillRate', label: 'Fill Rates', icon: Target, color: 'orange' },
+            { key: 'trends', label: 'Trends', icon: Calendar, color: 'purple' }
+          ].map(({ key, label, icon: Icon, color }) => (
             <Button
               key={key}
               variant={selectedChart === key ? "default" : "outline"}
               size="sm"
               onClick={() => setSelectedChart(key as ChartType)}
-              className={`flex items-center gap-2 ${
+              className={cn(
+                "flex items-center gap-2",
                 selectedChart === key 
-                  ? "bg-indigo-600 hover:bg-indigo-700" 
-                  : "hover:bg-indigo-50"
-              }`}
+                  ? `bg-${color}-600 hover:bg-${color}-700` 
+                  : `hover:bg-${color}-50 hover:border-${color}-200`
+              )}
             >
               <Icon className="w-4 h-4" />
               {label}
@@ -417,32 +448,6 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
       <CardContent>
         <div className="animate-fade-in">
           {renderChart()}
-        </div>
-        
-        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-3 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">{formatNumber(data.length)}</div>
-            <div className="text-sm text-blue-700">Total Sessions</div>
-          </div>
-          <div className="text-center p-3 bg-green-50 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">
-              {formatNumber(data.reduce((sum, item) => sum + item.checkedIn, 0))}
-            </div>
-            <div className="text-sm text-green-700">Total Attendance</div>
-          </div>
-          <div className="text-center p-3 bg-purple-50 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">
-              {formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
-            </div>
-            <div className="text-sm text-purple-700">Total Revenue</div>
-          </div>
-          <div className="text-center p-3 bg-orange-50 rounded-lg">
-            <div className="text-2xl font-bold text-orange-600">
-              {((data.reduce((sum, item) => sum + item.checkedIn, 0) / 
-                 data.reduce((sum, item) => sum + item.capacity, 0)) * 100).toFixed(1)}%
-            </div>
-            <div className="text-sm text-orange-700">Avg Fill Rate</div>
-          </div>
         </div>
       </CardContent>
     </Card>
