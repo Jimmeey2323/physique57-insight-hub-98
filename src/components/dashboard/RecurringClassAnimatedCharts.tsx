@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -280,7 +279,6 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
               <ResponsiveContainer width="100%" height="100%">
                 <RadialBarChart cx="50%" cy="50%" innerRadius="20%" outerRadius="90%" data={timeSlotData}>
                   <RadialBar
-                    minAngle={15}
                     label={{ position: 'insideStart', fill: '#fff' }}
                     background
                     clockWise
