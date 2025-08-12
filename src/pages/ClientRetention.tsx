@@ -11,17 +11,17 @@ import { BarChart3, TrendingUp, Target, Users as UsersIcon, Eye, Calendar, Filte
 import { Card, CardContent } from '@/components/ui/card';
 import { NewClientFilterOptions } from '@/types/dashboard';
 
-// Import new components
+// Import enhanced components
 import { ClientConversionLocationSelector } from '@/components/dashboard/ClientConversionLocationSelector';
-import { NewClientFilterSection } from '@/components/dashboard/NewClientFilterSection';
-import { ClientConversionMetricCards } from '@/components/dashboard/ClientConversionMetricCards';
+import { EnhancedClientConversionFilterSection } from '@/components/dashboard/EnhancedClientConversionFilterSection';
+import { ClientConversionDetailedDataTable } from '@/components/dashboard/ClientConversionDetailedDataTable';
+import { EnhancedClientConversionMetrics } from '@/components/dashboard/EnhancedClientConversionMetrics';
 import { ClientConversionTopBottomLists } from '@/components/dashboard/ClientConversionTopBottomLists';
 import { ClientConversionCharts } from '@/components/dashboard/ClientConversionCharts';
 import { ClientConversionMonthOnMonthTable } from '@/components/dashboard/ClientConversionMonthOnMonthTable';
 import { ClientConversionYearOnYearTable } from '@/components/dashboard/ClientConversionYearOnYearTable';
 import { ClientConversionMembershipTable } from '@/components/dashboard/ClientConversionMembershipTable';
 import { ClientConversionEntityTable } from '@/components/dashboard/ClientConversionEntityTable';
-import { NewCsvDataTable } from '@/components/dashboard/NewCsvDataTable';
 
 const ClientRetention = () => {
   const { data, loading } = useNewClientData();
@@ -39,7 +39,9 @@ const ClientRetention = () => {
     paymentMethod: [],
     retentionStatus: [],
     conversionStatus: [],
-    isNew: []
+    isNew: [],
+    minLTV: undefined,
+    maxLTV: undefined
   });
 
   useEffect(() => {
@@ -103,6 +105,39 @@ const ClientRetention = () => {
       filtered = filtered.filter(client => 
         filters.trainer.includes(client.trainerName || '')
       );
+    }
+
+    // Apply other filters
+    if (filters.conversionStatus.length > 0) {
+      filtered = filtered.filter(client => 
+        filters.conversionStatus.includes(client.conversionStatus || '')
+      );
+    }
+
+    if (filters.retentionStatus.length > 0) {
+      filtered = filtered.filter(client => 
+        filters.retentionStatus.includes(client.retentionStatus || '')
+      );
+    }
+
+    if (filters.paymentMethod.length > 0) {
+      filtered = filtered.filter(client => 
+        filters.paymentMethod.includes(client.paymentMethod || '')
+      );
+    }
+
+    if (filters.isNew.length > 0) {
+      filtered = filtered.filter(client => 
+        filters.isNew.includes(client.isNew || '')
+      );
+    }
+
+    // Apply LTV filters
+    if (filters.minLTV !== undefined) {
+      filtered = filtered.filter(client => (client.ltv || 0) >= filters.minLTV!);
+    }
+    if (filters.maxLTV !== undefined) {
+      filtered = filtered.filter(client => (client.ltv || 0) <= filters.maxLTV!);
     }
     
     console.log('Filtered data:', filtered.length, 'records');
@@ -169,11 +204,13 @@ const ClientRetention = () => {
             onLocationChange={setSelectedLocation}
           />
 
-          {/* Filter Section */}
-          <NewClientFilterSection
+          {/* Enhanced Filter Section */}
+          <EnhancedClientConversionFilterSection
             filters={filters}
             onFiltersChange={setFilters}
-            data={data}
+            locations={uniqueLocations}
+            trainers={uniqueTrainers}
+            membershipTypes={uniqueMembershipTypes}
           />
 
           {/* Main Content Tabs */}
@@ -185,8 +222,8 @@ const ClientRetention = () => {
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Overview
                   </TabsTrigger>
-                  <TabsTrigger value="filters" className="text-sm font-medium">
-                    <Filter className="w-4 h-4 mr-2" />
+                  <TabsTrigger value="analytics" className="text-sm font-medium">
+                    <TrendingUp className="w-4 h-4 mr-2" />
                     Analytics
                   </TabsTrigger>
                   <TabsTrigger value="charts" className="text-sm font-medium">
@@ -214,12 +251,12 @@ const ClientRetention = () => {
             </Card>
 
             <TabsContent value="overview" className="space-y-8">
-              <ClientConversionMetricCards data={filteredData} />
+              <EnhancedClientConversionMetrics data={filteredData} />
               <ClientConversionTopBottomLists data={filteredData} />
             </TabsContent>
 
-            <TabsContent value="filters" className="space-y-8">
-              <ClientConversionMetricCards data={filteredData} />
+            <TabsContent value="analytics" className="space-y-8">
+              <EnhancedClientConversionMetrics data={filteredData} />
               <ClientConversionEntityTable data={filteredData} />
             </TabsContent>
 
@@ -240,7 +277,7 @@ const ClientRetention = () => {
             </TabsContent>
 
             <TabsContent value="detailed" className="space-y-8">
-              <NewCsvDataTable />
+              <ClientConversionDetailedDataTable data={filteredData} />
             </TabsContent>
           </Tabs>
         </main>
