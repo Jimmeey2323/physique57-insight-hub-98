@@ -19,6 +19,7 @@ import {
   BarChart,
   Bar,
   PieChart as RechartsPieChart,
+  Pie,
   Cell,
   RadialBarChart,
   RadialBar,
@@ -207,7 +208,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
                       formatter={(value: any) => [formatNumber(value), 'Total Attendance']}
                     />
                     <Legend />
-                    <pie
+                    <Pie
                       data={chartData.attendanceData}
                       cx="50%"
                       cy="50%"
@@ -219,7 +220,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
                       {chartData.attendanceData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
                       ))}
-                    </pie>
+                    </Pie>
                   </RechartsPieChart>
                 </ResponsiveContainer>
               </CardContent>
