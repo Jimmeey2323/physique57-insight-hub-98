@@ -2,6 +2,7 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 interface Column {
   key: string;
@@ -9,6 +10,7 @@ interface Column {
   render?: (value: any, row: any) => React.ReactNode;
   align?: 'left' | 'center' | 'right';
   className?: string;
+  sortable?: boolean;
 }
 
 interface ModernDataTableProps {
@@ -21,6 +23,9 @@ interface ModernDataTableProps {
   maxHeight?: string;
   className?: string;
   headerGradient?: string;
+  onSort?: (field: string) => void;
+  sortField?: string;
+  sortDirection?: 'asc' | 'desc';
 }
 
 export const ModernDataTable: React.FC<ModernDataTableProps> = ({
@@ -32,7 +37,10 @@ export const ModernDataTable: React.FC<ModernDataTableProps> = ({
   footerData,
   maxHeight,
   className,
-  headerGradient = "from-slate-600 to-slate-700"
+  headerGradient = "from-slate-600 to-slate-700",
+  onSort,
+  sortField,
+  sortDirection
 }) => {
   if (loading) {
     return (
@@ -50,6 +58,12 @@ export const ModernDataTable: React.FC<ModernDataTableProps> = ({
       }
     }
     return value;
+  };
+
+  const handleSort = (column: Column) => {
+    if (column.sortable && onSort) {
+      onSort(column.key);
+    }
   };
 
   return (
@@ -70,10 +84,19 @@ export const ModernDataTable: React.FC<ModernDataTableProps> = ({
                   "font-bold text-white h-8 px-3 text-xs whitespace-nowrap",
                   column.align === 'center' && 'text-center',
                   column.align === 'right' && 'text-right',
+                  column.sortable && 'cursor-pointer hover:bg-white/10',
                   column.className
                 )}
+                onClick={() => handleSort(column)}
               >
-                {column.header}
+                <div className="flex items-center gap-1">
+                  {column.header}
+                  {column.sortable && sortField === column.key && (
+                    sortDirection === 'asc' ? 
+                      <ChevronUp className="w-3 h-3" /> : 
+                      <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
               </TableHead>
             ))}
           </TableRow>

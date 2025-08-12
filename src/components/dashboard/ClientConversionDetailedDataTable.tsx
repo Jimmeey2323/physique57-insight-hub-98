@@ -39,8 +39,9 @@ export const ClientConversionDetailedDataTable: React.FC<ClientConversionDetaile
     let filtered = data.filter(client => {
       if (!searchTerm) return true;
       const searchLower = searchTerm.toLowerCase();
+      const fullName = `${client.firstName} ${client.lastName}`.toLowerCase();
       return (
-        client.customerName?.toLowerCase().includes(searchLower) ||
+        fullName.includes(searchLower) ||
         client.trainerName?.toLowerCase().includes(searchLower) ||
         client.firstVisitLocation?.toLowerCase().includes(searchLower) ||
         client.membershipUsed?.toLowerCase().includes(searchLower) ||
@@ -98,14 +99,14 @@ export const ClientConversionDetailedDataTable: React.FC<ClientConversionDetaile
 
   const columns = [
     {
-      key: 'customerName',
+      key: 'firstName',
       header: 'Customer Details',
       render: (value: string, item: NewClientData) => (
         <div className="space-y-1">
-          <div className="font-semibold text-slate-900">{value || 'Unknown'}</div>
+          <div className="font-semibold text-slate-900">{`${item.firstName || ''} ${item.lastName || ''}`.trim() || 'Unknown'}</div>
           <div className="text-xs text-slate-500 flex items-center gap-1">
             <Calendar className="w-3 h-3" />
-            {item.firstVisitDate ? formatDate(item.firstVisitDate) : 'No date'}
+            {formatDate(item.firstVisitDate)}
           </div>
           <div className="text-xs text-slate-500 flex items-center gap-1">
             <MapPin className="w-3 h-3" />

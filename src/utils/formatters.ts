@@ -23,6 +23,23 @@ export const formatNumber = (value: number): string => {
   return value.toLocaleString('en-IN');
 };
 
+export const formatDate = (dateString: string): string => {
+  if (!dateString) return 'No date';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid date';
+    
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return 'Invalid date';
+  }
+};
+
 // Specific formatters for metrics
 export const formatATV = (value: number): string => {
   return formatCurrency(Math.round(value)); // No decimals
