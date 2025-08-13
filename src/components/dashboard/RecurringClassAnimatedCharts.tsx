@@ -73,7 +73,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
       .sort((a, b) => a.month.localeCompare(b.month))
       .slice(-6); // Last 6 months
 
-    // Top classes by attendance
+    // Top classes by attendance (checked in values)
     const classStats = data.reduce((acc, item) => {
       if (!acc[item.class]) {
         acc[item.class] = {
@@ -84,7 +84,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
           totalSessions: 0
         };
       }
-      acc[item.class].totalAttendance += item.checkedIn;
+      acc[item.class].totalAttendance += item.checkedIn; // Using checkedIn for attendance
       acc[item.class].totalRevenue += item.revenue;
       acc[item.class].totalCapacity += item.capacity;
       acc[item.class].totalSessions += 1;
@@ -97,7 +97,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
         fillRate: cls.totalCapacity > 0 ? (cls.totalAttendance / cls.totalCapacity) * 100 : 0,
         avgAttendance: cls.totalSessions > 0 ? cls.totalAttendance / cls.totalSessions : 0
       }))
-      .sort((a: any, b: any) => b.totalAttendance - a.totalAttendance)
+      .sort((a: any, b: any) => b.avgAttendance - a.avgAttendance) // Sort by class average
       .slice(0, 8);
 
     const revenueData = Object.values(classStats)
@@ -119,7 +119,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
           totalSessions: 0
         };
       }
-      acc[item.trainer].totalAttendance += item.checkedIn;
+      acc[item.trainer].totalAttendance += item.checkedIn; // Using checkedIn for attendance
       acc[item.trainer].totalRevenue += item.revenue;
       acc[item.trainer].totalCapacity += item.capacity;
       acc[item.trainer].totalSessions += 1;
@@ -174,7 +174,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
                       }}
                       formatter={(value: any, name: string) => [
                         name === 'totalAttendance' ? formatNumber(value) : value.toFixed(1),
-                        name === 'totalAttendance' ? 'Total Attendance' : 'Avg per Session'
+                        name === 'totalAttendance' ? 'Total Checked In' : 'Avg per Session'
                       ]}
                     />
                     <Bar 
@@ -205,7 +205,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
                 <ResponsiveContainer width="100%" height={300}>
                   <RechartsPieChart>
                     <Tooltip 
-                      formatter={(value: any) => [formatNumber(value), 'Total Attendance']}
+                      formatter={(value: any) => [formatNumber(value), 'Total Checked In']}
                     />
                     <Legend />
                     <Pie
@@ -378,7 +378,7 @@ export const RecurringClassAnimatedCharts: React.FC<RecurringClassAnimatedCharts
                     stroke="#3b82f6" 
                     strokeWidth={3}
                     dot={{ fill: '#3b82f6', strokeWidth: 2, r: 6 }}
-                    name="Total Attendance"
+                    name="Total Checked In"
                     animationDuration={1000}
                   />
                   <Line 
