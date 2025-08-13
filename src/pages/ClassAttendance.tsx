@@ -1,227 +1,109 @@
 
-import React, { useState, useEffect } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useTeacherRecurringData } from '@/hooks/useTeacherRecurringData';
-import { RecurringClassFilterSection } from '@/components/dashboard/RecurringClassFilterSection';
-import { RecurringClassMetricCards } from '@/components/dashboard/RecurringClassMetricCards';
-import { RecurringClassDetailedDataTable } from '@/components/dashboard/RecurringClassDetailedDataTable';
-import { RecurringClassMonthOnMonthTable } from '@/components/dashboard/RecurringClassMonthOnMonthTable';
-import { RecurringClassYearOnYearTable } from '@/components/dashboard/RecurringClassYearOnYearTable';
-import { RecurringClassInteractiveRankings } from '@/components/dashboard/RecurringClassInteractiveRankings';
-import { RecurringClassAnimatedCharts } from '@/components/dashboard/RecurringClassAnimatedCharts';
-import { RecurringClassFilterOptions } from '@/types/recurringClass';
+import React, { useEffect } from 'react';
+import { SectionLayout } from '@/components/layout/SectionLayout';
+import { ClassAttendanceSection } from '@/components/dashboard/ClassAttendanceSection';
+import { RefinedLoader } from '@/components/ui/RefinedLoader';
+import { useSessionsData } from '@/hooks/useSessionsData';
+import { useGlobalLoading } from '@/hooks/useGlobalLoading';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Home, Calendar } from 'lucide-react';
+import { Footer } from '@/components/ui/footer';
 
 const ClassAttendance = () => {
-  const { data, loading, error } = useTeacherRecurringData();
-  const [filteredData, setFilteredData] = useState(data);
-  
-  const [filters, setFilters] = useState<RecurringClassFilterOptions>({
-    dateRange: {
-      start: '',
-      end: ''
-    },
-    location: [],
-    trainer: [],
-    classType: [],
-    dayOfWeek: [],
-    timeSlot: [],
-    minCapacity: undefined,
-    maxCapacity: undefined,
-    minFillRate: undefined,
-    maxFillRate: undefined,
-    minRevenue: undefined,
-    maxRevenue: undefined,
-    showEmptyOnly: false,
-    showProblematicOnly: false
-  });
+  const { loading } = useSessionsData();
+  const { isLoading, setLoading } = useGlobalLoading();
+  const navigate = useNavigate();
 
-  // Apply filters to data
   useEffect(() => {
-    let filtered = [...data];
+    setLoading(loading, 'Processing class attendance analytics and trends...');
+  }, [loading, setLoading]);
 
-    // Date range filter
-    if (filters.dateRange.start && filters.dateRange.end) {
-      const startDate = new Date(filters.dateRange.start);
-      const endDate = new Date(filters.dateRange.end);
-      filtered = filtered.filter(item => {
-        const itemDate = new Date(item.date);
-        return itemDate >= startDate && itemDate <= endDate;
-      });
-    }
-
-    // Location filter
-    if (filters.location.length > 0) {
-      filtered = filtered.filter(item => filters.location.includes(item.location));
-    }
-
-    // Trainer filter
-    if (filters.trainer.length > 0) {
-      filtered = filtered.filter(item => filters.trainer.includes(item.trainer));
-    }
-
-    // Class type filter
-    if (filters.classType.length > 0) {
-      filtered = filtered.filter(item => filters.classType.includes(item.class));
-    }
-
-    // Day of week filter
-    if (filters.dayOfWeek.length > 0) {
-      filtered = filtered.filter(item => filters.dayOfWeek.includes(item.day));
-    }
-
-    // Time slot filter
-    if (filters.timeSlot.length > 0) {
-      const timeSlotMapping: Record<string, [number, number]> = {
-        'Early Morning': [5, 8],
-        'Morning': [8, 12],
-        'Afternoon': [12, 17],
-        'Evening': [17, 21],
-        'Night': [21, 24]
-      };
-
-      filtered = filtered.filter(item => {
-        const timeStr = item.time;
-        const [hours] = timeStr.split(':').map(Number);
-        
-        return filters.timeSlot.some(slot => {
-          const [start, end] = timeSlotMapping[slot] || [0, 24];
-          return hours >= start && hours < end;
-        });
-      });
-    }
-
-    // Capacity filters
-    if (filters.minCapacity !== undefined) {
-      filtered = filtered.filter(item => item.capacity >= filters.minCapacity!);
-    }
-    if (filters.maxCapacity !== undefined) {
-      filtered = filtered.filter(item => item.capacity <= filters.maxCapacity!);
-    }
-
-    // Fill rate filters
-    if (filters.minFillRate !== undefined) {
-      filtered = filtered.filter(item => {
-        const fillRate = item.capacity > 0 ? (item.checkedIn / item.capacity) * 100 : 0;
-        return fillRate >= filters.minFillRate!;
-      });
-    }
-    if (filters.maxFillRate !== undefined) {
-      filtered = filtered.filter(item => {
-        const fillRate = item.capacity > 0 ? (item.checkedIn / item.capacity) * 100 : 0;
-        return fillRate <= filters.maxFillRate!;
-      });
-    }
-
-    // Revenue filters
-    if (filters.minRevenue !== undefined) {
-      filtered = filtered.filter(item => item.revenue >= filters.minRevenue!);
-    }
-    if (filters.maxRevenue !== undefined) {
-      filtered = filtered.filter(item => item.revenue <= filters.maxRevenue!);
-    }
-
-    // Special filters
-    if (filters.showEmptyOnly) {
-      filtered = filtered.filter(item => item.checkedIn === 0);
-    }
-    if (filters.showProblematicOnly) {
-      filtered = filtered.filter(item => {
-        const fillRate = item.capacity > 0 ? (item.checkedIn / item.capacity) * 100 : 0;
-        return fillRate < 30 || item.lateCancelled > 3;
-      });
-    }
-
-    setFilteredData(filtered);
-  }, [data, filters]);
-
-  const handleFilterChange = (newFilters: RecurringClassFilterOptions) => {
-    setFilters(newFilters);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-slate-600">Loading recurring class performance data...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center py-12">
-            <p className="text-red-600 text-lg font-semibold">Error loading data: {error}</p>
-          </div>
-        </div>
-      </div>
-    );
+  if (isLoading) {
+    return <RefinedLoader subtitle="Processing class attendance analytics and trends..." />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-slate-800 mb-2">
-            Recurring Class Performance
-          </h1>
-          <p className="text-slate-600 text-lg">
-            Comprehensive analytics for class attendance, trainer performance, and revenue metrics
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/20">
+      {/* Animated Header Section */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 text-white">
+        <div className="absolute inset-0 bg-black/20" />
+        
+        {/* Animated background elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-4 -left-4 w-32 h-32 bg-white/10 rounded-full animate-pulse"></div>
+          <div className="absolute top-20 right-10 w-24 h-24 bg-indigo-300/20 rounded-full animate-bounce delay-1000"></div>
+          <div className="absolute bottom-10 left-20 w-40 h-40 bg-purple-300/10 rounded-full animate-pulse delay-500"></div>
         </div>
-
-        {/* Comprehensive Filter Section */}
-        <RecurringClassFilterSection
-          data={data}
-          onFiltersChange={handleFilterChange}
-          className="mb-6"
-        />
-
-        {/* Metric Cards */}
-        <RecurringClassMetricCards data={filteredData} />
-
-        {/* Main Content Tabs */}
-        <Tabs defaultValue="tables" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="tables" className="text-sm font-medium">
-              Performance Tables
-            </TabsTrigger>
-            <TabsTrigger value="charts" className="text-sm font-medium">
-              Analytics Charts
-            </TabsTrigger>
-            <TabsTrigger value="rankings" className="text-sm font-medium">
-              Interactive Rankings
-            </TabsTrigger>
-            <TabsTrigger value="detailed" className="text-sm font-medium">
-              Detailed View
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="tables" className="space-y-6">
-            <div className="grid gap-6">
-              <RecurringClassMonthOnMonthTable data={filteredData} />
-              <RecurringClassYearOnYearTable data={filteredData} />
+        
+        <div className="relative px-8 py-12">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <Button 
+                onClick={() => navigate('/')} 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 hover:border-white/30 transition-all duration-200"
+              >
+                <Home className="w-4 h-4" />
+                Dashboard
+              </Button>
             </div>
-          </TabsContent>
-
-          <TabsContent value="charts" className="space-y-6">
-            <RecurringClassAnimatedCharts data={filteredData} />
-          </TabsContent>
-
-          <TabsContent value="rankings" className="space-y-6">
-            <RecurringClassInteractiveRankings data={filteredData} />
-          </TabsContent>
-
-          <TabsContent value="detailed" className="space-y-6">
-            <RecurringClassDetailedDataTable data={filteredData} />
-          </TabsContent>
-        </Tabs>
+            
+            <div className="text-center space-y-4">
+              <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-full px-6 py-2 border border-white/20 animate-fade-in-up">
+                <Calendar className="w-5 h-5" />
+                <span className="font-medium">Attendance Analytics</span>
+              </div>
+              
+              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-white via-indigo-100 to-purple-100 bg-clip-text text-transparent animate-fade-in-up delay-200">
+                Class Attendance
+              </h1>
+              
+              <p className="text-xl text-indigo-100 max-w-2xl mx-auto leading-relaxed animate-fade-in-up delay-300">
+                Comprehensive class utilization and attendance trend analysis across all sessions
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <div className="container mx-auto px-6 py-8">
+        <main className="space-y-8">
+          <ClassAttendanceSection />
+        </main>
+      </div>
+      
+      <Footer />
+
+      <style>{`
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fade-in-up {
+          animation: fade-in-up 0.6s ease-out forwards;
+        }
+        
+        .delay-200 {
+          animation-delay: 0.2s;
+        }
+        
+        .delay-300 {
+          animation-delay: 0.3s;
+        }
+        
+        .delay-500 {
+          animation-delay: 0.5s;
+        }
+      `}</style>
     </div>
   );
 };
